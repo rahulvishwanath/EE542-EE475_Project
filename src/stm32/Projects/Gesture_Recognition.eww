@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workspace>
+    <project>
+        <path>$WS_DIR$\Gesture_Recognition\EWARM\Gesture_Recognition.ewp</path>
+    </project>
+    <batchBuild>
+        <batchDefinition>
+            <name>ALL</name>
+            <member>
+                <project>Gesture_Recognition</project>
+                <configuration>STM32F4-Discovery</configuration>
+            </member>
+        </batchDefinition>
+    </batchBuild>
+</workspace>
