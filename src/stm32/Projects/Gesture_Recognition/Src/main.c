@@ -61,14 +61,14 @@ void main()
 
     // Format data into a string
     snprintf(msg, sizeof(msg), 
-                 "AX:%.2fg AY:%.2fg AZ:%.2fg | GX:%.2fdps GY:%.2fdps GZ:%.2fdps\r\n", 
+                 "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\r\n", 
                  A[0], A[1], A[2], G[0], G[1], G[2]);
 
     // Send data to uart
     HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
 
     // Sample every 250ms
-    HAL_Delay(250);
+    HAL_Delay(3);
   }
   
   // return 1;

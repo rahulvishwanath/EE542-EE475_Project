@@ -20,7 +20,7 @@
         <LeaveTargetRunning>_ 0</LeaveTargetRunning>
     </StLinkDriver>
     <DebugChecksum>
-        <Checksum>1827160063</Checksum>
+        <Checksum>494553941</Checksum>
     </DebugChecksum>
     <Exceptions>
         <StopOnUncaught>_ 0</StopOnUncaught>
@@ -29,6 +29,30 @@
     <CodeCoverage>
         <Enabled>_ 0</Enabled>
     </CodeCoverage>
+    <Disassembly>
+        <InstrCount>0</InstrCount>
+    </Disassembly>
+    <CallStack>
+        <ShowArgs>0</ShowArgs>
+    </CallStack>
+    <SWOTraceHWSettings>
+        <OverrideDefaultClocks>0</OverrideDefaultClocks>
+        <CpuClock>168000000</CpuClock>
+        <ClockAutoDetect>0</ClockAutoDetect>
+        <ClockWanted>2000000</ClockWanted>
+        <JtagSpeed>2000000</JtagSpeed>
+        <Prescaler>84</Prescaler>
+        <TimeStampPrescIndex>0</TimeStampPrescIndex>
+        <TimeStampPrescData>0</TimeStampPrescData>
+        <PcSampCYCTAP>1</PcSampCYCTAP>
+        <PcSampPOSTCNT>15</PcSampPOSTCNT>
+        <PcSampIndex>0</PcSampIndex>
+        <DataLogMode>0</DataLogMode>
+        <ITMportsEnable>0</ITMportsEnable>
+        <ITMportsTermIO>0</ITMportsTermIO>
+        <ITMportsLogFile>0</ITMportsLogFile>
+        <ITMlogFile>$PROJ_DIR$\ITM.log</ITMlogFile>
+    </SWOTraceHWSettings>
     <Trace2>
         <Enabled>0</Enabled>
         <ShowSource>0</ShowSource>
@@ -74,9 +98,6 @@
         <ShowTimeSum>1</ShowTimeSum>
         <SumSortOrder>0</SumSortOrder>
     </EventLog>
-    <Disassembly>
-        <InstrCount>0</InstrCount>
-    </Disassembly>
     <LogFile>
         <LoggingEnabled>_ 0</LoggingEnabled>
         <LogFile>_ ""</LogFile>
@@ -86,9 +107,6 @@
         <LoggingEnabled>_ 0</LoggingEnabled>
         <LogFile>_ ""</LogFile>
     </TermIOLog>
-    <CallStack>
-        <ShowArgs>0</ShowArgs>
-    </CallStack>
     <DriverProfiling>
         <Enabled>0</Enabled>
         <Mode>3</Mode>
@@ -102,24 +120,6 @@
     <CallStackStripe>
         <ShowTiming>1</ShowTiming>
     </CallStackStripe>
-    <SWOTraceHWSettings>
-        <OverrideDefaultClocks>0</OverrideDefaultClocks>
-        <CpuClock>168000000</CpuClock>
-        <ClockAutoDetect>0</ClockAutoDetect>
-        <ClockWanted>2000000</ClockWanted>
-        <JtagSpeed>2000000</JtagSpeed>
-        <Prescaler>84</Prescaler>
-        <TimeStampPrescIndex>0</TimeStampPrescIndex>
-        <TimeStampPrescData>0</TimeStampPrescData>
-        <PcSampCYCTAP>1</PcSampCYCTAP>
-        <PcSampPOSTCNT>15</PcSampPOSTCNT>
-        <PcSampIndex>0</PcSampIndex>
-        <DataLogMode>0</DataLogMode>
-        <ITMportsEnable>0</ITMportsEnable>
-        <ITMportsTermIO>0</ITMportsTermIO>
-        <ITMportsLogFile>0</ITMportsLogFile>
-        <ITMlogFile>$PROJ_DIR$\ITM.log</ITMlogFile>
-    </SWOTraceHWSettings>
     <DisassembleMode>
         <mode>0</mode>
     </DisassembleMode>
