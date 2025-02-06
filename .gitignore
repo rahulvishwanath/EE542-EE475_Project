@@ -1,0 +1,18 @@
+bin/
+build/
+html/
+latex/
+tmp/
+Debug/
+~*
+_.o
+_.a
+  
+# Compiled binaries
+*.o
+*.bin
+*.elf
+*.hex
+*.map
+*.out
+*.obj
