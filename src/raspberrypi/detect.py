@@ -24,6 +24,7 @@ from picamera2 import Picamera2
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
+import time
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
@@ -33,6 +34,9 @@ mp_drawing_styles = mp.solutions.drawing_styles
 COUNTER, FPS = 0, 0
 START_TIME = time.time()
 DETECTION_RESULT = None
+
+# Global detection task suspension flag
+DETECT_SUSPEND = 0
 
 
 def run(model: str, num_hands: int,
@@ -54,7 +58,7 @@ def run(model: str, num_hands: int,
       width: The width of the frame captured from the camera.
       height: The height of the frame captured from the camera.
   """
-
+    
     # Grab images as numpy arrays and leave everything else to OpenCV.
     picam2 = Picamera2()
     picam2.configure(picam2.create_preview_configuration(main={"format": 'XRGB8888', "size": (width, height)}))
@@ -66,33 +70,70 @@ def run(model: str, num_hands: int,
     text_color = (0, 0, 0)  # black
     font_size = 1
     font_thickness = 1
+    fps_avg_frame_count = 10
+
+    # Task to manage the Mediapipe livestream detector thread
+    # Limits detector queue size to 1
+    def task_detect(image):
+        global DETECT_SUSPEND
+        if not DETECT_SUSPEND:
+            # Convert the image from BGR to RGB as required by the TFLite model.
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
+
+            # Run hand landmarker using the model.
+            detector.detect_async(mp_image, time.time_ns() // 1_000_000)
+
+            # Suspend task_detect
+            DETECT_SUSPEND = 1
+
+    # Callback function for Mediapipe livestream detector
+    def save_result(result: vision.HandLandmarkerResult,
+                    unused_output_image: mp.Image, timestamp_ms: int):
+        global FPS, COUNTER, START_TIME, DETECTION_RESULT, DETECT_SUSPEND
+
+        # Calculate the FPS
+        if COUNTER % fps_avg_frame_count == 0:
+            FPS = fps_avg_frame_count / (time.time() - START_TIME)
+            START_TIME = time.time()
+
+        DETECTION_RESULT = result
+        COUNTER += 1
+
+        # Resume task_detect
+        DETECT_SUSPEND = 0
 
     # Initialize the hand landmarker model
     base_options = python.BaseOptions(model_asset_path=model)
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
-        running_mode=vision.RunningMode.VIDEO,
+        running_mode=vision.RunningMode.LIVE_STREAM,
         num_hands=num_hands,
         min_hand_detection_confidence=min_hand_detection_confidence,
         min_hand_presence_confidence=min_hand_presence_confidence,
-        min_tracking_confidence=min_tracking_confidence)
+        min_tracking_confidence=min_tracking_confidence,
+        result_callback=save_result)
     detector = vision.HandLandmarker.create_from_options(options)
 
     # Continuously capture images from the camera and run inference
     while True:
-
         # Remove the alpha channel if present
-        current_frame = picam2.capture_array()[:, :, :3]  
+        image = picam2.capture_array()[:, :, :3]  
 
-        # Doesn't work without using flip at least once for some reason...
-        current_frame = cv2.flip(current_frame, 1)
-        current_frame = cv2.flip(current_frame, 1)
+        # TODO EI 2/4/25 IDK why but flipping is needed at least once
+        image = cv2.flip(image, 1)
+        image = cv2.flip(image, 1)
 
-        # Convert the image from BGR to RGB as required by the TFLite model.
-        rgb_image = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
-
-        DETECTION_RESULT = detector.detect_for_video(mp_image, time.time_ns() // 1_000_000)
+        # Give new frame to detection task
+        task_detect(image)
+        
+        # Show the FPS
+        fps_text = 'FPS = {:.1f}'.format(FPS)
+        text_location = (left_margin, row_size)
+        current_frame = image
+        cv2.putText(current_frame, fps_text, text_location,
+                    cv2.FONT_HERSHEY_DUPLEX,
+                    font_size, text_color, font_thickness, cv2.LINE_AA)
 
         # Landmark visualization parameters.
         MARGIN = 10  # pixels
