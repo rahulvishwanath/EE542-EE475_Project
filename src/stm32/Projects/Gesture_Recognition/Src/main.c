@@ -1,5 +1,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "haptic_drv.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -46,6 +47,15 @@ void main()
 
   // Configure MPU6500, wakeup, sample rate, full scale range
   MPU6500_Init();
+  
+  HAL_StatusTypeDef status;
+  // Configure Haptic Controller
+  status = DRV2605_Init(&hi2c1);
+  if (status != HAL_OK)
+  {
+    snprintf(msg, sizeof(msg), "Init failed\r\n");
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+  }
 
   // Acceleration and Gyro Data 
   float A[3];
@@ -66,9 +76,25 @@ void main()
 
     // Send data to uart
     HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    
+    // Play a effect
+    status = DRV2605_PlayEffect(&hi2c1, 3);
+    if (status != HAL_OK)
+    {
+      snprintf(msg, sizeof(msg), "Failed to play effect\r\n");
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    }
 
     // Sample every 250ms
-    HAL_Delay(3);
+    HAL_Delay(250);
+    
+    // Stop motor
+    DRV2605_Stop(&hi2c1);
+    if (status != HAL_OK)
+    {
+      snprintf(msg, sizeof(msg), "Failed to stop effect\r\n");
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    }
   }
   
   // return 1;
