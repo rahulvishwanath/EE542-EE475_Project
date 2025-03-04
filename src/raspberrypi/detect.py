@@ -1,3 +1,4 @@
+# source ~/repos/mediapipe-samples/.venv/bin/activate
 # Copyright 2023 The MediaPipe Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +17,7 @@
 import argparse
 import sys
 import time
+import numpy as np
 
 import cv2
 import mediapipe as mp
@@ -25,6 +27,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
 import time
+import pyautogui
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
@@ -37,7 +40,8 @@ DETECTION_RESULT = None
 
 # Global detection task suspension flag
 DETECT_SUSPEND = 0
-
+# Click state machine flag
+CLICK_PREV = False
 
 def run(model: str, num_hands: int,
         min_hand_detection_confidence: float,
@@ -72,6 +76,8 @@ def run(model: str, num_hands: int,
     font_thickness = 1
     fps_avg_frame_count = 10
 
+    global CLICK_PREV
+
     # Task to manage the Mediapipe livestream detector thread
     # Limits detector queue size to 1
     def task_detect(image):
@@ -80,10 +86,8 @@ def run(model: str, num_hands: int,
             # Convert the image from BGR to RGB as required by the TFLite model.
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
-
             # Run hand landmarker using the model.
             detector.detect_async(mp_image, time.time_ns() // 1_000_000)
-
             # Suspend task_detect
             DETECT_SUSPEND = 1
 
@@ -118,12 +122,8 @@ def run(model: str, num_hands: int,
     # Continuously capture images from the camera and run inference
     while True:
         # Remove the alpha channel if present
-        image = picam2.capture_array()[:, :, :3]  
-
-        # TODO EI 2/4/25 IDK why but flipping is needed at least once
-        image = cv2.flip(image, 1)
-        image = cv2.flip(image, 1)
-
+        image = picam2.capture_array()[:, :, :3].astype(np.uint8) 
+        
         # Give new frame to detection task
         task_detect(image)
         
@@ -146,34 +146,40 @@ def run(model: str, num_hands: int,
             for idx in range(len(DETECTION_RESULT.hand_landmarks)):
                 hand_landmarks = DETECTION_RESULT.hand_landmarks[idx]
                 handedness = DETECTION_RESULT.handedness[idx]
-
-                # Draw the hand landmarks.
-                hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
-                hand_landmarks_proto.landmark.extend([
-                    landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y,
-                                                    z=landmark.z) for landmark
-                    in hand_landmarks
-                ])
-                mp_drawing.draw_landmarks(
-                    current_frame,
-                    hand_landmarks_proto,
-                    mp_hands.HAND_CONNECTIONS,
-                    mp_drawing_styles.get_default_hand_landmarks_style(),
-                    mp_drawing_styles.get_default_hand_connections_style())
-
-                # Get the top left corner of the detected hand's bounding box.
+                    
+                # Get the dimensions of the current frame
                 height, width, _ = current_frame.shape
-                x_coordinates = [landmark.x for landmark in hand_landmarks]
-                y_coordinates = [landmark.y for landmark in hand_landmarks]
-                text_x = int(min(x_coordinates) * width)
-                text_y = int(min(y_coordinates) * height) - MARGIN
 
-                # Draw handedness (left or right hand) on the image.
-                cv2.putText(current_frame, f"{handedness[0].category_name}",
-                            (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
-                            FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS,
-                            cv2.LINE_AA)
+                thumb_landmark = hand_landmarks[4]
+                thumb_x = int(thumb_landmark.x * width)
+                thumb_y = int(thumb_landmark.y * height)
 
+                landmark = hand_landmarks[8]
+                pointer_x = int(landmark.x * width)
+                pointer_y = int(landmark.y * height)
+
+                mouse_x = (thumb_x+pointer_x)/2
+                mouse_y = (thumb_y+pointer_y)/2
+                pyautogui.moveTo(mouse_x, mouse_y)
+
+                distance = np.sqrt((thumb_x-pointer_x)**2+(thumb_y-pointer_y)**2)
+                # print(f"Distance: {distance} px")
+                click = distance < 70
+                if click and not CLICK_PREV:
+                    print("CLICK")
+                    pyautogui.click()
+                else:
+                    print("NOT CLICK")
+                CLICK_PREV = click
+
+                # Draw a green dot at cursor
+                cv2.circle(current_frame, (pointer_x, pointer_y), 8, (0, 255, 0), -1)  # Green filled circle
+                # Draw a red dot at thumb
+                cv2.circle(current_frame, (thumb_x, thumb_y), 8, (255, 0, 0), -1)  # Green filled circle
+
+        # cv2.imshow('hand_landmarker', current_frame)
+        cv2.namedWindow('hand_landmarker', cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty('hand_landmarker', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.imshow('hand_landmarker', current_frame)
 
         # Stop the program if the ESC key is pressed.
@@ -241,7 +247,7 @@ def main():
         help='Height of frame to capture from camera.',
         required=False,
         type=int,
-        default=960)
+        default=720)
     args = parser.parse_args()
 
     run(args.model, args.numHands, args.minHandDetectionConfidence,
