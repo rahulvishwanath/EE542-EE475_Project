@@ -1,11 +1,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <stdio.h>
-#include <string.h>
+#include "global.h"
+#include "sensorTask.h"
+#include "hapticTask.h"
 
-#include <stdarg.h>
-#include "edge-impulse-sdk/classifier/ei_run_classifier.h"
-#include "haptic_drv.h"
 
 #define MPU6500_ADDR 0xD0
 #define WHO_AM_I_REG 0x75
@@ -13,213 +11,55 @@
 #define SMPRT_DIV_REG 0x19
 #define ACCEL_CONFIG_REG 0x1C
 #define GYRO_CONFIG_REG 0x1B
-#define ACCEL_START_REG 0x3B
 #define CLASSIFICATION_THRESHOLD 0.6f
-//#define LSB_ACCEL_SENSITIVITY 16384
-//#define LSB_GYRO_SENSITIVITY 131.0f
 
-#define SAMPLING_RATE_HZ 105                // 111 samples per second
-#define TEST_DURATION_SECONDS 3           // Duration of the test in seconds
-#define TOTAL_SAMPLES (SAMPLING_RATE_HZ * TEST_DURATION_SECONDS)
-
-
-using namespace ei;
 
 void MX_GPIOD_Init(void);
 void MX_I2C1_Init(void);
 void MX_USART2_UART_Init(void);
 static void MX_CRC_Init(void);
-void MPU6500_Init(void);
 void ERROR_LED(int);
-void MPU6500_Read_Accel(float *);
-void MPU6500_Read_Gyro(float *);
+void MPU6500_Init(void);
 
 I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart2;
 CRC_HandleTypeDef hcrc;
-
-void vprint(const char *fmt, va_list argp)
-{
-    char string[200];
-    if(0 < vsprintf(string, fmt, argp)) // build string
-    {
-    	//strcat(string, "\r");  // Ensure newlines are properly handled
-        HAL_UART_Transmit(&huart2, (uint8_t*)string, strlen(string), 0xffffff); // send message via UART
-    }
-}
-
-void ei_printf(const char *format, ...) {
-    va_list myargs;
-    va_start(myargs, format);
-    vprint(format, myargs);
-    va_end(myargs);
-}
-
+QueueHandle_t hapticQueue;
+SemaphoreHandle_t sensorSemaphore;
+SemaphoreHandle_t classifierSemaphore;
 
 int main()
 {
-  // Init HAL, needs to be called at the very beginning to call any other HAL func
-  HAL_Init();
+	// Init HAL, needs to be called at the very beginning to call any other HAL func
+	HAL_Init();
+	MX_GPIOD_Init();
+	MX_I2C1_Init(); // Configure PB6 (SCL) and PB7 (SDA) for I2C
+	MX_USART2_UART_Init(); // Configure PA3(RX) and PA2(TX) for USART2
+	MX_CRC_Init();
+	MPU6500_Init();
+
+	hapticQueue = xQueueCreate(4, sizeof(char));
 
 
-  // Setup onboard LED on pin PD14 for error handling
-  MX_GPIOD_Init();
+	sensorSemaphore = xSemaphoreCreateBinary();
+	classifierSemaphore = xSemaphoreCreateBinary();
 
-  // Configure PB6 (SCL) and PB7 (SDA) for I2C
-  MX_I2C1_Init();
-  
-  // Configure PA3(RX) and PA2(TX) for USART2
-  MX_USART2_UART_Init();
+	// Task Creation
+	xTaskCreate (sensorTask, "Sensor Task",(1024),0,2,0);
+	xTaskCreate (classifierTask, "Classifier Task",(1024),0,1,0);
+	xTaskCreate (hapticTask, "Haptic Task",(400),0,0,0);
 
-  MX_CRC_Init();
+	char msg[50];
 
-  // Buffer to send through UART
-  char msg[128];
-  snprintf(msg, sizeof(msg), "Setup successfull\r\n");
+	snprintf(msg, sizeof(msg), "Starting Task Scheduler\r\n");
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
 
-  HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100); 
+	vTaskStartScheduler(); // This function never returns
 
-  // Configure MPU6500, wakeup, sample rate, full scale range
-  MPU6500_Init();
-
-  HAL_StatusTypeDef status;
-  // Configure Haptic Controller
-  status = DRV2605_Init(&hi2c1);
-  if (status != HAL_OK)
-  {
-    snprintf(msg, sizeof(msg), "Init failed\r\n");
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-  }
-
-
-  // Acceleration and Gyro Data 
-  float G[3];
-  float A[3];
-  float imu_data[6*TOTAL_SAMPLES];
-  bool debugFlag = false;
-
-  signal_t signal;
-  while (1)
-  {
-	if (debugFlag){
-		snprintf(msg, sizeof(msg), "Collecting Gyro Data..!\r\n");
-		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-	}
-
-	uint32_t startTime = HAL_GetTick();    // Get start time
-	int sampleCount = 0;
-
-	while (sampleCount < TOTAL_SAMPLES) {
-		if (HAL_GetTick() - startTime >= (1000 / SAMPLING_RATE_HZ) * sampleCount) {
-			MPU6500_Read_Accel(A);
-			MPU6500_Read_Gyro(G);
-			imu_data[sampleCount * 6] = A[0];
-			imu_data[sampleCount * 6 + 1] = A[1];
-			imu_data[sampleCount * 6 + 2] = A[2];
-			imu_data[sampleCount * 6 + 3] = G[0];
-			imu_data[sampleCount * 6 + 4] = G[1];
-			imu_data[sampleCount * 6 + 5] = G[2];
-			sampleCount++;
-		}
-	}
-
-	uint32_t endTime = HAL_GetTick();      // Get end time
-
-	// Calculate the elapsed time in seconds
-	float elapsedTime = (endTime - startTime) / 1000.0;
-
-	if (debugFlag){
-		snprintf(msg, sizeof(msg),"Collected Samples: %d\n", sampleCount);
-		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-
-		snprintf(msg, sizeof(msg),"Elapsed Time: %.2f seconds\n", elapsedTime);
-		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-
-		snprintf(msg, sizeof(msg), "Done..!! Collecting Gyro Data Completed..!\r\n");
-		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+	while (1)
+	{
 
 	}
-
-   // Run inference
-   signal.total_length = 6*TOTAL_SAMPLES;
-   signal.get_data = [&imu_data](size_t offset, size_t length, float *out_ptr) {
-		  memcpy(out_ptr, imu_data + offset, length * sizeof(float));
-		  return 0;
-	  };
-
-	ei_impulse_result_t result = { 0 };
-	EI_IMPULSE_ERROR res = run_classifier(&signal, &result, debugFlag);
-
-	if (debugFlag){
-		ei_printf("\r\n\r\n********** Edge Impulse Classification Results **********\r\n");
-		ei_printf("run_classifier returned: %d\r\n", res);
-
-		ei_printf("---------------------------------------------------------\r\n");
-		ei_printf("Timing (ms):\r\n");
-		ei_printf("  DSP: %d ms\r\n", result.timing.dsp);
-		ei_printf("  Classification: %d ms\r\n", result.timing.classification);
-		ei_printf("  Anomaly: %d ms\r\n", result.timing.anomaly);
-		ei_printf("---------------------------------------------------------\r\n");
-
-		ei_printf("Predictions:\r\n");
-		for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-			ei_printf("  %s: ", result.classification[ix].label);  // Print label first
-			ei_printf_float(result.classification[ix].value);      // Print value inline
-			ei_printf("\r\n");                                     // Newline at the end
-		}
-
-		#if EI_CLASSIFIER_HAS_ANOMALY == 1
-		ei_printf("---------------------------------------------------------\r\n");
-		ei_printf("Anomaly Score: ");
-		ei_printf_float(result.anomaly);
-		ei_printf("\r\n");
-		#endif
-
-		ei_printf("*********************************************************\r\n\r\n");
-
-		ei_printf("Predictions:\r\n");
-		for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-			ei_printf("  %s: ", result.classification[ix].label);  // Print label first
-			ei_printf_float(result.classification[ix].value);      // Print value inline
-			ei_printf("\r\n");                                     // Newline at the end
-			}
-	}
-
-
-	float label_thres = 0.0f;
-	int label_ix = 0;
-	for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-		if (result.classification[ix].value > label_thres){
-			label_ix = ix;
-		}
-	}
-
-	if (label_ix != 2){
-		// Play a effect
-		status = DRV2605_PlayEffect(&hi2c1, 14);
-		if (status != HAL_OK)
-		{
-		  snprintf(msg, sizeof(msg), "Failed to play effect\r\n");
-		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-		}
-
-		// Sample every 250ms
-		HAL_Delay(250);
-
-		// Stop motor
-		DRV2605_Stop(&hi2c1);
-		if (status != HAL_OK)
-		{
-		  snprintf(msg, sizeof(msg), "Failed to stop effect\r\n");
-		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-		}
-	}
-	ei_printf(" %s ",result.classification[label_ix].label);
-	ei_printf("\r\n");
-
-  }
-  
-  return 1;
 }
 
 void MX_GPIOD_Init(void)
@@ -300,7 +140,33 @@ void MX_USART2_UART_Init(void) {
     huart2.Init.OverSampling = UART_OVERSAMPLING_16;
 
     if (HAL_UART_Init(&huart2) != HAL_OK)
-      ERROR_LED(1000);
+          ERROR_LED(250);
+
+}
+
+/**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
+
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
+
 }
 
 void MPU6500_Init(void)
@@ -311,13 +177,13 @@ void MPU6500_Init(void)
 
   // Read WHO_AM_I register
   HAL_I2C_Mem_Read(&hi2c1, MPU6500_ADDR, WHO_AM_I_REG, 1, &check, 1, 100);
-  
+
   snprintf(msg, sizeof(msg), "WHO_AM_I: 0x%02X\r\n", check);
   HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-  
+
   // MPU6500 address is 0x68 but WHO_AM_I reg should be 0x70
   if (check != 0x70)
-    ERROR_LED(5000);
+	  ERROR_LED(100);
 
   // Wake the sensor up
   Data = 0;
@@ -339,50 +205,6 @@ void MPU6500_Init(void)
   HAL_I2C_Mem_Write(&hi2c1, MPU6500_ADDR, GYRO_CONFIG_REG, 1, &Data, 1, 1000);
 }
 
-// Reads Acceleration Data from MPU6500, converts to 'g' format and stores in A
-// A = [Ax, Ay, Az]
-void MPU6500_Read_Accel(float *A)
-{
-  uint8_t Accel_Data[6];
-  int16_t Accel_X_RAW, Accel_Y_RAW, Accel_Z_RAW;
-
-  // Read 6 bytes of data starting at 0x3B to 0x40
-  HAL_I2C_Mem_Read(&hi2c1, MPU6500_ADDR, ACCEL_START_REG, 1, Accel_Data, 6, 1000);
-
-  // 0x3B = ACCEL_X_OUT_H, 0x3C = ACCEL_X_OUT_L
-  Accel_X_RAW = (int16_t)(Accel_Data[0] << 8 | Accel_Data[1]);
-  // 0x3D = ACCEL_Y_OUT_H, 0x3E = ACCEL_Y_OUT_L
-  Accel_Y_RAW = (int16_t)(Accel_Data[2] << 8 | Accel_Data[3]);
-  // 0x3F = ACCEL_Z_OUT_H, 0x40 = ACCEL_Z_OUT_L
-  Accel_Z_RAW = (int16_t)(Accel_Data[4] << 8 | Accel_Data[5]);
-
-  A[0] = (float)Accel_X_RAW;
-  A[1] = (float)Accel_Y_RAW;
-  A[2] = (float)Accel_Z_RAW;
-}
-
-// Reads Gyro Data from MPU6500, converts to dps (degrees per second) format and stores in G
-// G = [Gx, Gy, Gz]
-void MPU6500_Read_Gyro(float *G)
-{
-  uint8_t Gyro_Data[6];
-  int16_t Gyro_X_RAW, Gyro_Y_RAW, Gyro_Z_RAW;
-
-  // Read 6 bytes of data starting at 0x3B to 0x40
-  HAL_I2C_Mem_Read(&hi2c1, MPU6500_ADDR, ACCEL_START_REG, 1, Gyro_Data, 6, 1000);
-
-  // 0x3B = ACCEL_X_OUT_H, 0x3C = ACCEL_X_OUT_L
-  Gyro_X_RAW = (int16_t)(Gyro_Data[0] << 8 | Gyro_Data[1]);
-  // 0x3D = ACCEL_Y_OUT_H, 0x3E = ACCEL_Y_OUT_L
-  Gyro_Y_RAW = (int16_t)(Gyro_Data[2] << 8 | Gyro_Data[3]);
-  // 0x3F = ACCEL_Z_OUT_H, 0x40 = ACCEL_Z_OUT_L
-  Gyro_Z_RAW = (int16_t)(Gyro_Data[4] << 8 | Gyro_Data[5]);
-
-  G[0] = (float)Gyro_X_RAW;
-  G[1] = (float)Gyro_Y_RAW;
-  G[2] = (float)Gyro_Z_RAW;
-}
-
 void ERROR_LED(int delay)
 {
   // Initialization Error
@@ -395,28 +217,3 @@ void ERROR_LED(int delay)
   }
 }
 
-/**
-  * @brief CRC Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CRC_Init(void)
-{
-
-  /* USER CODE BEGIN CRC_Init 0 */
-
-  /* USER CODE END CRC_Init 0 */
-
-  /* USER CODE BEGIN CRC_Init 1 */
-
-  /* USER CODE END CRC_Init 1 */
-  hcrc.Instance = CRC;
-  if (HAL_CRC_Init(&hcrc) != HAL_OK)
-  {
-	  ERROR_LED(250);
-  }
-  /* USER CODE BEGIN CRC_Init 2 */
-
-  /* USER CODE END CRC_Init 2 */
-
-}

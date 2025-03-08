@@ -30,4 +30,11 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>Middlewares/Third_Party/FreeRTOS</name>
+			<type>2</type>
+			<location>C:/Users/EE475/Documents/Team6/GuestureTraining/I2cInit/Middlewares/Third_Party/FreeRTOS/Source</location>
+		</link>
+	</linkedResources>
 </projectDescription>
