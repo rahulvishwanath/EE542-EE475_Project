@@ -57,7 +57,7 @@ clock = pygame.time.Clock()
 game_active = False
 
 # Weather API
-API_KEY = '143a79241efa4179ab6235152250403'
+API_KEY = '' # Add your own API key from weatherapi.com
 CITY = 'Seattle'
 WEATHER_URL = f'http://api.weatherapi.com/v1/current.json?key={API_KEY}&q={CITY}&aqi=no'
 weather_img = None
@@ -69,8 +69,6 @@ stock_prices = []
 current_stock_index = 0
 last_stock_switch_time = time.time()
 STOCK_SWITCH_INTERVAL = 3
-# stock_text = ''
-# ticker_speed = 3
 
 # Mediapipe Hand Tracking
 mp_hands = mp.solutions.hands
@@ -155,23 +153,6 @@ def process_frame(detector, image, width, height):
             mouse_y = int(pointer_knuckle_landmark.y * height)
             pyautogui.moveTo(pointer_x, pointer_y)
 
-            # distance = np.sqrt((thumb_x - pointer_x) ** 2 + (thumb_y - pointer_y) ** 2)
-            # click = distance < 70
-            # if click and not CLICK_PREV:
-            #     print("CLICK")
-            #     pyautogui.click()
-            #     # JUST FOR TESTING DITTO
-            #     # GESTURE = 'leftswipe'
-            # else:
-            #     print("NOT CLICK")
-            # CLICK_PREV = click
-
-            # Optionally visualize on frame
-            # cv2.circle(image, (pointer_x, pointer_y), 8, (0, 255, 0), -1)  # Green filled circle
-            # cv2.circle(image, (thumb_x, thumb_y), 8, (255, 0, 0), -1)  # Red filled circle
-    # else:
-    #     ticker_speed = 3
-
     return image
 
 
@@ -207,26 +188,20 @@ def fetch_stock_prices():
     stock_prices.clear()
 
     for symbol in stock_symbols:
-        price = get_stock_price(symbol)  # Replace with actual API call
+        price = get_stock_price(symbol)
         stock_prices.append(f"{price}")
-
-    # stock_text = "   |   ".join(stock_prices)  # Separate stocks with a divider
 
 def update_widget():
     global CURRENT_WIDGET, GESTURE
     if GESTURE in ['', 'idle']:
         return
-    
-    # widget_order = ['time', 'weather', 'music', 'stock']
-    # widget_order = ['time', 'weather', 'stock']
+
     widget_order = ['weather', 'time', 'stock']
     curr_idx = widget_order.index(CURRENT_WIDGET)
 
     if GESTURE == 'leftswipe':
-        # CURRENT_WIDGET = widget_order[(curr_idx + 1) % len(widget_order)]
         start_widget_transition(widget_order[(curr_idx + 1) % len(widget_order)])
     elif GESTURE == 'rightswipe':
-        # CURRENT_WIDGET = widget_order[(curr_idx - 1) % len(widget_order)]
         start_widget_transition(widget_order[(curr_idx - 1) % len(widget_order)])
     
     GESTURE = 'idle'
@@ -265,18 +240,12 @@ def draw_widgets(weather):
     panel_x = (WIDTH // 2) - (panel_width // 2)
     panel_y = 10
 
-    # panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
-    # # Draw the rounded rectangle on the semi-transparent surface
-    # draw_rounded_rect(panel_surface, (32, 32, 32, 190), panel_surface.get_rect(), 15)
-    # screen.blit(panel_surface, (panel_x, panel_y))
     draw_rounded_rect((panel_width, panel_height), (32, 32, 32, RECT_ALPHA), (panel_x, panel_y), 15)
 
     if CURRENT_WIDGET == 'time':
         widget_text = datetime.now().strftime("%H:%M:%S")
     elif CURRENT_WIDGET == 'weather':
         widget_text = weather
-    # elif CURRENT_WIDGET == 'music':
-    #     widget_text = "Now Playing: [Your Song Here]"
     elif CURRENT_WIDGET == 'stock':
         if time.time() - last_stock_switch_time > STOCK_SWITCH_INTERVAL:
             current_stock_index = (current_stock_index + 1) % len(stock_symbols)
@@ -317,12 +286,10 @@ def draw_buttons():
     close_button = pygame.Rect(GAME_BUTTON_X, GAME_BUTTON_Y, GAME_BUTTON_WIDTH, GAME_BUTTON_HEIGHT)
 
     if not game_active:
-        # draw_rounded_rect(screen, (0, 255, 0), start_button, 15)
         draw_rounded_rect((GAME_BUTTON_WIDTH, GAME_BUTTON_HEIGHT), (0, 255, 0, RECT_ALPHA), (GAME_BUTTON_X, GAME_BUTTON_Y), 15)
         text_width, text_height = font.size("Start Game")
         screen.blit(font.render("Start Game", True, (0, 0, 0)), (GAME_BUTTON_X + (GAME_BUTTON_WIDTH - text_width) // 2, GAME_BUTTON_Y + (GAME_BUTTON_HEIGHT - text_height) // 2))
     else:
-        # draw_rounded_rect(screen, (255, 0, 0), close_button, 15)
         draw_rounded_rect((GAME_BUTTON_WIDTH, GAME_BUTTON_HEIGHT), (0, 255, 0, RECT_ALPHA), (GAME_BUTTON_X, GAME_BUTTON_Y), 15)
         text_width, text_height = font.size("Stop Game")
         screen.blit(font.render("Stop Game", True, (0, 0, 0)), (GAME_BUTTON_X + (GAME_BUTTON_WIDTH - text_width) // 2, GAME_BUTTON_Y + (GAME_BUTTON_HEIGHT - text_height) // 2))
