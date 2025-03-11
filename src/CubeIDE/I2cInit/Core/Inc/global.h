@@ -7,7 +7,6 @@
 
 #ifndef INC_GLOBAL_H_
 #define INC_GLOBAL_H_
-#endif /* INC_GLOBAL_H_ */
 
 #pragma once
 #include <main.h>
@@ -20,9 +19,9 @@
 extern I2C_HandleTypeDef hi2c1;
 extern UART_HandleTypeDef huart2;
 extern QueueHandle_t hapticQueue;
-extern SemaphoreHandle_t sensorSemaphore, classifierSemaphore;
+extern SemaphoreHandle_t classifierSemaphore;
 
 extern void ERROR_LED(int);
 
-
+#endif /* INC_GLOBAL_H_ */
 

@@ -25,7 +25,6 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart2;
 CRC_HandleTypeDef hcrc;
 QueueHandle_t hapticQueue;
-SemaphoreHandle_t sensorSemaphore;
 SemaphoreHandle_t classifierSemaphore;
 
 int main()
@@ -38,18 +37,32 @@ int main()
 	MX_CRC_Init();
 	MPU6500_Init();
 
+	HAL_StatusTypeDef status;
+	// Configure Haptic Controller
+	status = DRV2605_Init(&hi2c1);
+
+	char msg[50];
+	if (status != HAL_OK)
+	  {
+	    snprintf(msg, sizeof(msg), "Init failed\r\n");
+	    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+	  }
+
+
 	hapticQueue = xQueueCreate(4, sizeof(char));
 
 
-	sensorSemaphore = xSemaphoreCreateBinary();
 	classifierSemaphore = xSemaphoreCreateBinary();
+	if (classifierSemaphore == NULL) {
+		snprintf(msg, sizeof(msg), "ERROR: Failed to create classifierSemaphore!\r\n");
+		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+	    while (1);
+	}
 
 	// Task Creation
 	xTaskCreate (sensorTask, "Sensor Task",(1024),0,2,0);
-	xTaskCreate (classifierTask, "Classifier Task",(1024),0,1,0);
-	xTaskCreate (hapticTask, "Haptic Task",(400),0,0,0);
-
-	char msg[50];
+	xTaskCreate (classifierTask, "Classifier Task",(3*1024),0,1,0);
+	xTaskCreate (hapticTask, "Haptic Task",(400),0,1,0);
 
 	snprintf(msg, sizeof(msg), "Starting Task Scheduler\r\n");
 	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);

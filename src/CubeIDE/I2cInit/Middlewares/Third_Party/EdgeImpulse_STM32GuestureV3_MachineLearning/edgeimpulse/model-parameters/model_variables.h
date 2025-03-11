@@ -164,12 +164,12 @@ const ei_impulse_t impulse_640745_0 = {
     .project_name = "STM32GuestureV3",
     .impulse_id = 1,
     .impulse_name = "Impulse #1",
-    .deploy_version = 3,
+    .deploy_version = 5,
 
     .nn_input_frame_size = 264,
-    .raw_sample_count = 304,
+    .raw_sample_count = 251,
     .raw_samples_per_frame = 6,
-    .dsp_input_frame_size = 304 * 6,
+    .dsp_input_frame_size = 251 * 6,
     .input_width = 0,
     .input_height = 0,
     .input_frames = 0,
@@ -196,7 +196,7 @@ const ei_impulse_t impulse_640745_0 = {
 
     .sensor = EI_CLASSIFIER_SENSOR_FUSION,
     .fusion_string = "A0 + A1 + A2 + G0 + G1 + G2",
-    .slice_size = (304/4),
+    .slice_size = (251/4),
     .slices_per_model_window = 4,
 
     .has_anomaly = EI_ANOMALY_TYPE_UNKNOWN,

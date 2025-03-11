@@ -3,7 +3,7 @@
 // Function to write a value to a DRV2605 register using I2C
 HAL_StatusTypeDef DRV2605_WriteRegister(I2C_HandleTypeDef *hi2c, uint8_t reg, uint8_t value)
 {
-  return HAL_I2C_Mem_Write(hi2c, DRV2605_ADDR, reg, 1, &value, 1, 100);
+  return HAL_I2C_Mem_Write(hi2c, DRV2605_ADDR, reg, 1, &value, 1, 1000);
 }
 
 // Function to read a value from a DRV2605 register using I2C
